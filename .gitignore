@@ -1,0 +1,36 @@
+# Ignore OS and Python junk
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Ignore virtual environments
+venv/
+
+# Ignore Excel/Office temp files
+~$*.xlsx
+~$*.xls
+~$*.xlsm
+~$*.ods
+*.tmp
+
+# Ignore logs
+*.log
+
+# Ignore user data and uploads
+tax_form_uploads/
+*.csv
+
+# Ignore test samples and outputs
+test_samples/
+
+# Ignore .env and secrets
+.env
+
+# Ignore VSCode and JetBrains project files
+.vscode/
+.idea/

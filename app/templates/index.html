@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tax Form Extractor</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body {
+      padding-top: 2rem;
+      padding-bottom: 2rem;
+    }
+    .hidden {
+      display: none;
+    }
+    .page-checkbox {
+      margin-right: 5px;
+    }
+    #pageSelectionContainer, #saveDirectoryContainer {
+      margin-top: 20px;
+      margin-bottom: 20px;
+    }
+    #processingStatus {
+      margin-top: 20px;
+    }
+    .spinner-border {
+      margin-right: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1 class="mb-4">Tax Form Extractor</h1>
+    
+    <div class="card mb-4">
+      <div class="card-header">
+        <h5>Upload Tax Form</h5>
+      </div>
+      <div class="card-body">
+        <form id="uploadForm">
+          <div class="mb-3">
+            <label for="fileInput" class="form-label">Select PDF or DOCX file</label>
+            <input type="file" class="form-control" id="fileInput" accept=".pdf,.docx,.doc" required>
+          </div>
+          <div class="mb-3">
+            <label for="dictionarySelect" class="form-label">Select Mapping Dictionary</label>
+            <select class="form-select" id="dictionarySelect" required>
+              <option value="" disabled selected>Loading...</option>
+            </select>
+            <div id="dictionaryDescription" class="form-text text-muted"></div>
+          </div>
+          <button type="submit" class="btn btn-primary">Upload</button>
+        </form>
+      </div>
+    </div>
+    
+    <!-- Page Selection Section (Initially Hidden) -->
+    <div id="pageSelectionContainer" class="card mb-4 hidden">
+      <div class="card-header">
+        <h5>Select Pages to Process</h5>
+      </div>
+      <div class="card-body">
+        <p>Enter the page numbers to extract (e.g. 1,2,5-7):</p>
+        <input type="text" id="pageInput" class="form-control mb-3" placeholder="e.g. 1,2,5-7">
+        <button id="processButton" class="btn btn-success">Process</button>
+      </div>
+    </div>
+    
+    <!-- Save Directory Section (Initially Hidden) -->
+    <div id="saveDirectoryContainer" class="card mb-4 hidden">
+      <div class="card-header">
+        <h5>Specify Save Location</h5>
+      </div>
+      <div class="card-body">
+        <label for="saveDirectory" class="form-label">Enter folder path to save the CSV file:</label>
+        <input type="text" class="form-control" id="saveDirectory" placeholder="Leave blank to use original file's folder">
+        <button id="confirmSaveLocation" class="btn btn-success mt-2">Confirm Save Location</button>
+      </div>
+    </div>
+    
+    <!-- Processing Status -->
+    <div id="processingStatus" class="alert alert-info hidden" role="alert">
+      <div class="d-flex align-items-center">
+        <div class="spinner-border spinner-border-sm" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+        <span id="statusMessage">Processing...</span>
+      </div>
+    </div>
+    
+    <!-- Results Section -->
+    <div id="resultsContainer" class="card mb-4 hidden">
+      <div class="card-header">
+        <h5>Extraction Results</h5>
+      </div>
+      <div class="card-body">
+        <div id="extractedDataContainer">
+          <h6>Extracted Data:</h6>
+          <pre id="extractedData" class="border p-3 bg-light"></pre>
+        </div>
+        <div id="mappedDataContainer" class="mt-4">
+          <h6>Mapped Data:</h6>
+          <pre id="mappedData" class="border p-3 bg-light"></pre>
+        </div>
+        <div id="mappingErrorsContainer"></div>
+        <div class="mt-4">
+          <button id="downloadCsvButton" class="btn btn-primary">Download CSV</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // DOM Elements
+      const uploadForm = document.getElementById('uploadForm');
+      const fileInput = document.getElementById('fileInput');
+      const dictionarySelect = document.getElementById('dictionarySelect');
+      const pageSelectionContainer = document.getElementById('pageSelectionContainer');
+      const pageInput = document.getElementById('pageInput');
+      const processButton = document.getElementById('processButton');
+      const saveDirectoryContainer = document.getElementById('saveDirectoryContainer');
+      const saveDirectoryInput = document.getElementById('saveDirectory');
+      const confirmSaveLocation = document.getElementById('confirmSaveLocation');
+      const processingStatus = document.getElementById('processingStatus');
+      const statusMessage = document.getElementById('statusMessage');
+      const resultsContainer = document.getElementById('resultsContainer');
+      const extractedData = document.getElementById('extractedData');
+      const mappedData = document.getElementById('mappedData');
+      const downloadCsvButton = document.getElementById('downloadCsvButton');
+      
+      // File upload data
+      let uploadedFile = {
+        filepath: null,
+        filename: null,
+        filetype: null,
+        pageCount: 0,
+        dictionary: null
+      };
+      
+      // Load available mapping dictionaries for dropdown
+      let mappingDescriptions = {};
+      fetch('/available_mappings')
+        .then(response => response.json())
+        .then(data => {
+          dictionarySelect.innerHTML = '';
+          mappingDescriptions = {};
+          if (data.mappings && data.mappings.length > 0) {
+            data.mappings.forEach(mapping => {
+              const option = document.createElement('option');
+              option.value = mapping.name;
+              option.textContent = mapping.name;
+              dictionarySelect.appendChild(option);
+              mappingDescriptions[mapping.name] = mapping.description;
+            });
+            dictionarySelect.selectedIndex = 0;
+            // Show initial description
+            document.getElementById('dictionaryDescription').textContent = mappingDescriptions[dictionarySelect.value] || '';
+          } else {
+            const option = document.createElement('option');
+            option.value = '';
+            option.textContent = 'No dictionaries found';
+            dictionarySelect.appendChild(option);
+            dictionarySelect.disabled = true;
+            document.getElementById('dictionaryDescription').textContent = '';
+          }
+        })
+        .catch(() => {
+          dictionarySelect.innerHTML = '<option value="">Error loading dictionaries</option>';
+          dictionarySelect.disabled = true;
+          document.getElementById('dictionaryDescription').textContent = '';
+        });
+      // Update description on change
+      dictionarySelect.addEventListener('change', function() {
+        document.getElementById('dictionaryDescription').textContent = mappingDescriptions[dictionarySelect.value] || '';
+      });
+      
+      // Handle file upload
+      uploadForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        if (!fileInput.files[0]) {
+          alert('Please select a file to upload');
+          return;
+        }
+        
+        if (!dictionarySelect.value) {
+          alert('Please select a mapping dictionary');
+          return;
+        }
+        
+        const file = fileInput.files[0];
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        // Store selected dictionary for later use
+        uploadedFile.dictionary = dictionarySelect.value;
+        
+        // Show processing status
+        processingStatus.classList.remove('hidden');
+        statusMessage.textContent = 'Uploading file...';
+        
+        fetch('/upload', {
+          method: 'POST',
+          body: formData
+        })
+        .then(response => {
+          if (!response.ok) {
+            return response.json().then(data => {
+              throw new Error(data.error || 'Upload failed');
+            });
+          }
+          return response.json();
+        })
+        .then(data => {
+          if (data.error) {
+            throw new Error(data.error);
+          }
+          
+          // Store uploaded file info
+          uploadedFile.filepath = data.filepath;
+          uploadedFile.filename = data.filename;
+          uploadedFile.filetype = data.filetype;
+          
+          // For PDF files, get page count and show page selection
+          if (data.filetype === 'pdf') {
+            return fetch('/get_page_count', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ filepath: data.filepath })
+            })
+            .then(response => {
+              if (!response.ok) {
+                return response.json().then(data => {
+                  throw new Error(data.error || 'Failed to get page count');
+                });
+              }
+              return response.json();
+            });
+          } else {
+            // For non-PDF files, process directly
+            return { pageCount: 1, success: true };
+          }
+        })
+        .then(data => {
+          if (data.error) {
+            throw new Error(data.error);
+          }
+          
+          processingStatus.classList.add('hidden');
+          uploadedFile.pageCount = data.pageCount;
+          
+          // For PDF files with multiple pages, show page selection
+          if (uploadedFile.filetype === 'pdf' && uploadedFile.pageCount > 1) {
+            pageSelectionContainer.classList.remove('hidden');
+            pageInput.value = '';
+          } else {
+            // For single page documents or non-PDFs, process directly
+            processFile([1], null);
+          }
+        })
+        .catch(error => {
+          processingStatus.classList.add('hidden');
+          console.error('Error:', error);
+          alert('Error: ' + error.message);
+        });
+      });
+      
+      // Handle process button click for page selection
+      processButton.addEventListener('click', function() {
+        let pageStr = pageInput.value.trim();
+        if (!pageStr) {
+          alert('Please enter page numbers to process (e.g. 1,2,5-7)');
+          return;
+        }
+        // Parse page ranges (e.g. 1,2,5-7)
+        let pages = [];
+        pageStr.split(',').forEach(part => {
+          if (part.includes('-')) {
+            let [start, end] = part.split('-').map(Number);
+            if (!isNaN(start) && !isNaN(end) && start <= end) {
+              for (let i = start; i <= end; i++) pages.push(i);
+            }
+          } else {
+            let n = Number(part);
+            if (!isNaN(n)) pages.push(n);
+          }
+        });
+        if (pages.length === 0) {
+          alert('Invalid page numbers. Please use a format like 1,2,5-7.');
+          return;
+        }
+        processFile(pages, null);
+      });
+      
+      // Handle confirm save location click
+      confirmSaveLocation.addEventListener('click', function() {
+        const selectedPages = JSON.parse(saveDirectoryContainer.dataset.pages || '[]');
+        const saveDirectory = saveDirectoryInput.value.trim() || null;
+        processFile(selectedPages, saveDirectory);
+      });
+      
+      // Process file with selected pages and optional save directory
+      function processFile(pages, saveDirectory) {
+        // Hide save directory container if visible
+        saveDirectoryContainer.classList.add('hidden');
+        
+        // Show processing status
+        processingStatus.classList.remove('hidden');
+        statusMessage.textContent = 'Processing file...';
+        
+        // Compose request data
+        const requestData = {
+          filepath: uploadedFile.filepath,
+          filetype: uploadedFile.filetype,
+          pages: pages,
+          save_directory: saveDirectory,
+          dictionary: uploadedFile.dictionary
+        };
+        
+        fetch('/process', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(requestData)
+        })
+        .then(response => response.json())
+        .then(data => {
+          processingStatus.classList.add('hidden');
+          if (data.error) {
+            throw new Error(data.error);
+          }
+          
+          // Update status
+          statusMessage.textContent = 'Processing complete!';
+          setTimeout(() => {
+            processingStatus.classList.add('hidden');
+          }, 1500);
+          
+          // Display results
+          extractedData.textContent = JSON.stringify(data.extracted_data, null, 2);
+          mappedData.textContent = JSON.stringify(data.mapped_data, null, 2);
+          resultsContainer.classList.remove('hidden');
+          showMappingErrors(data.mapping_warnings || []);
+          
+          // Store CSV filename for download
+          downloadCsvButton.dataset.filename = data.csv_filename;
+        })
+        .catch(error => {
+          processingStatus.classList.add('hidden');
+          console.error('Processing error:', error);
+          alert('Error processing file: ' + error.message);
+        });
+      }
+      
+      // Show mapping errors in results panel
+      function showMappingErrors(errors) {
+        let errorHtml = '';
+        if (errors && errors.length > 0) {
+          errorHtml = `<div class="alert alert-warning mt-3"><strong>Mapping Warnings:</strong><ul>` +
+            errors.map(e => `<li>${e}</li>`).join('') + '</ul></div>';
+        }
+        document.getElementById('mappingErrorsContainer').innerHTML = errorHtml;
+      }
+      
+      // Handle CSV download
+      downloadCsvButton.addEventListener('click', function() {
+        const filename = this.dataset.filename;
+        if (!filename) {
+          alert('No CSV file available for download');
+          return;
+        }
+        window.location.href = `/download/${filename}`;
+      });
+    });
+  </script>
+</body>
+</html>
