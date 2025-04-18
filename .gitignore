@@ -1,5 +1,4 @@
 # Ignore OS and Python junk
-__pycache__/
 *.pyc
 *.pyo
 *.pyd
@@ -18,8 +17,17 @@ venv/
 ~$*.ods
 *.tmp
 
+# Ignore Poppler binaries
+poppler/
+
 # Ignore logs
 *.log
+app/*.log
+app/templates/*.log
+
+# Ignore Python cache
+__pycache__/
+app/modules/__pycache__/
 
 # Ignore user data and uploads
 tax_form_uploads/
