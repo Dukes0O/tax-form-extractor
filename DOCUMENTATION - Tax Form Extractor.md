@@ -81,25 +81,56 @@ This initiative will evolve the existing single‑dictionary extractor (currentl
   - Add troubleshooting notes for model‑switch errors and mapping file issues.  
   - Prepare a new release with updated changelog and version bump.
 
-### **Architecture Sketch**  
-All pipelines will feed into a shared core. At startup, the UI loads available dictionaries and models from a `config` service. When the user submits a job, the controller routes it through the selected extractor (PDF‑ or DOCX‑based), then invokes the mapping engine with the chosen dictionary, and finally hands off to CSV generation. A simplified component flow:
+### **High-Level Workflow Diagram**
 
 ```
-┌───────────────┐    ┌───────────────┐    ┌──────────────┐
-│   Front End   │──▶ │   Controller  │──▶ │  Extractor   │
-│ (Upload + UI) │    │ (routes tasks)│    │ (PDF/DOCX +  │
-└───────────────┘    └───────────────┘    │  OpenAI API) │
-                                              │
-                                              ▼
-                                         ┌────────────┐
-                                         │  Mapper    │
-                                         │ (multi‑dict)│
-                                         └────────────┘
-                                              │
-                                              ▼
-                                         ┌────────────┐
-                                         │ CSV Writer │
-                                         └────────────┘
+                     TAX FORM EXTRACTOR — HIGH LEVEL WORKFLOW
+┌────────────────────────────────────────────────────────────────────────────┐
+│                                USER INTERFACE                              │
+│                                                                            │
+│  ┌───────────────┐     ┌─────────────┐     ┌──────────────┐                │
+│  │ Upload Form   │     │ Select Pages│     │ Select Task  │                │
+│  │ (PDF/DOCX)    │ ──▶ │ (PDF only)  │ ──▶ │ (e.g. GIFI,   │                │
+│  └───────────────┘     └─────────────┘     │  T2S1, T661…)│                │
+│                                            └──────────────┘                │
+│                                                        │                  │
+│                                         ┌──────────────┴─────────────┐    │
+│                                         │ Select AI Model (OpenAI)   │    │
+│                                         └──────────────┬─────────────┘    │
+└─────────────────────────────────────────┬──────────────┴──────────────────┘
+                                          │
+                                          ▼
+                          ┌────────────────────────────────┐
+                          │         CONTROLLER LAYER        │
+                          │ Routes request to the correct   │
+                          │ extractor & mapping dictionary. │
+                          └────────────────────────────────┘
+                                          │
+                  ┌───────────────────────┼────────────────────────┐
+                  ▼                       ▼                        ▼
+       ┌────────────────┐     ┌──────────────────────┐   ┌────────────────────┐
+       │ PDF Extractor  │     │ DOCX Extractor       │   │ JSON / Text Inputs │
+       │ (img → Vision) │     │ (OpenAI or native)   │   │ (future forms?)    │
+       └────────────────┘     └──────────────────────┘   └────────────────────┘
+                  │                       │
+                  └────────────┬──────────┘
+                               ▼
+                 ┌─────────────────────────────┐
+                 │    GIFI / T2S1 / T661 Map    │
+                 │   (dictionary-specific logic│
+                 │    + parenthesis handling)  │
+                 └─────────────────────────────┘
+                               │
+                               ▼
+               ┌───────────────────────────────┐
+               │  CSV Generator (cell → value) │
+               └───────────────────────────────┘
+                               │
+                               ▼
+               ┌───────────────────────────────┐
+               │ User downloads mapped CSV     │
+               │ (to selected or default path) │
+               └───────────────────────────────┘
 ```
 
 ### **Technology Choices**  
@@ -202,6 +233,29 @@ All pipelines will feed into a shared core. At startup, the UI loads available d
 - Created post-processing logic for exception codes and negative values
 - Successfully tested with different tax form formats
 - Achieved high accuracy in extracting and formatting GIFI values
+
+## Recent Milestones & Completed Work (2025-04-18)
+
+### Epic 1: Multi-Dictionary Workflows & Enhanced UI — **COMPLETED**
+- Refactored mapping logic to support multiple user-defined dictionaries (GIFI, T2 Schedule 1, T661, etc.).
+- Added a safe list for intentionally excluded GIFI codes, reducing false mapping warnings.
+- UI now dynamically loads available mapping dictionaries and allows users to select extraction workflows at runtime.
+- Model selection (e.g., OpenAI Vision, GPT-3.5-turbo) is configurable via the UI and `.env`.
+- Improved error handling and feedback: mapping warnings are clear, only genuinely unmapped codes are flagged, and logs are more descriptive.
+- File upload and page selection UI refined for better usability.
+- Admin UI panel lists installed dictionaries (import/remove management planned for future release).
+- Project is now version-controlled on GitHub, with secrets, test data, and binaries excluded per best practices.
+- Testing performed on all extraction and mapping workflows; all tests passed successfully.
+- Documentation and `.gitignore` updated to reflect new architecture and security standards.
+
+### Additional UI Improvements
+- Enhanced feedback for mapping process (warnings, results, and errors now clearly shown to users).
+- UI flow improved: upload → select pages/workflow/model → process → download CSV.
+- User can specify save location for output files.
+
+---
+
+**The first epic and core feature set are now complete. The project is stable, tested, and ready for further enhancements or deployment.**
 
 ## Testing Results
 
@@ -315,12 +369,3 @@ By default, the application will start on **http://localhost:5000**.
 
 #### **Step 5: Download the CSV**
 - Once processing is complete, click **"Download CSV"** to save the extracted data.
-
-### **3. Testing the Application**
-#### **Full End-to-End Test**
-1. Upload a PDF or DOCX file.
-2. Select the appropriate pages (PDF only).
-3. Choose the correct workflow.
-4. Specify the save location (or use default).
-5. Process the document.
-6. Validate that the CSV is correct.
