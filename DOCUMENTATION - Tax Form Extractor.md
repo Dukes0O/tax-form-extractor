@@ -45,6 +45,19 @@ The Tax Form Extractor is an application designed to process tax documents (PDFs
 - Supports selection of different processing workflows
 - Future enhancement: Support for LAN hosting on a business network
 
+## New Feature: One-Click Startup Script
+
+A new `start.bat` script is included in the project root for easy, one-click startup on Windows:
+
+- Double-click `start.bat` to launch the app.
+- The script will:
+    - Activate a Python virtual environment if present.
+    - Check if dependencies are installed (by looking for Flask); if not, it will install them from `requirements.txt`.
+    - Start the Flask web server.
+    - Automatically open your default browser to http://localhost:5000.
+
+This streamlines the startup process and ensures you do not reinstall dependencies unnecessarily.
+
 ## Project Blueprint: Enabling Multi‑Dictionary Workflows & Enhanced UI
 
 ### **Scope Summary**  
@@ -90,7 +103,7 @@ This initiative will evolve the existing single‑dictionary extractor (currentl
 │                                                                            │
 │  ┌───────────────┐     ┌─────────────┐     ┌──────────────┐                │
 │  │ Upload Form   │     │ Select Pages│     │ Select Task  │                │
-│  │ (PDF/DOCX)    │ ──▶ │ (PDF only)  │ ──▶ │ (e.g. GIFI,   │                │
+│  │ (PDF/DOCX)    │ ──▶ │ (PDF only)  │ ──▶│ (e.g. GIFI,  │                │
 │  └───────────────┘     └─────────────┘     │  T2S1, T661…)│                │
 │                                            └──────────────┘                │
 │                                                        │                  │
